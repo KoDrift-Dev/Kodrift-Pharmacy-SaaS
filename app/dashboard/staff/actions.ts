@@ -110,7 +110,7 @@ export async function payStaffSalary(formData: FormData) {
   const amount = Number(formData.get("amount"));
   const description = String(formData.get("description")).slice(0, 300);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 100000000) {
-    return { error: "Please enter a valid payment amount." };
+    return;
   }
 
   await supabase.from("expenses").insert([{
