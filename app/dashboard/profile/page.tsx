@@ -36,7 +36,11 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const { viewAs } = await searchParams;
   const supabase = await createServer();
 
-  const { data: allStaff } = await supabase.from("staff").select("*").order("name");
+  // SECURITY: explicit columns — password_hash must never reach the client.
+  const { data: allStaff } = await supabase
+    .from("staff")
+    .select("id, name, role, shift, base_salary, commission_rate, phone, status, email, can_give_discount, can_delete_sales, can_view_reports, cnic_url, created_at")
+    .order("name");
   const staffMembers = (allStaff as StaffProfile[]) || [];
 
   const currentUser = staffMembers.find(s => s.id === viewAs) || staffMembers[0];
