@@ -1,25 +1,52 @@
 "use server";
 
 import { createServer } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
+import { createSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 
+// --- Best-effort login rate limiting (per email) ---
+// Note: in serverless environments this is per-instance memory, so it is a
+// defense-in-depth layer, not a replacement for a persistent store.
+const MAX_ATTEMPTS = 8;
+const WINDOW_MS = 10 * 60 * 1000;
+const attempts = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const entry = attempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > MAX_ATTEMPTS;
+}
+
 export async function processLogin(prevState: any, formData: FormData) {
-  const email = formData.get("email") as string;
-  const role = formData.get("role") as string;
-  const password = formData.get("password") as string;
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = String(formData.get("role") ?? "");
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password || !role) {
+    return { error: "Please fill in email, role and password." };
+  }
+
+  if (isRateLimited(`login:${email}`)) {
+    return { error: "Too many login attempts. Please wait a few minutes and try again." };
+  }
 
   const supabase = await createServer();
 
   const { data: staffMember, error } = await supabase
     .from("staff")
-    .select("*")
+    .select("id, name, email, role, status, password_hash")
     .eq("email", email)
     .single();
 
+  // Generic message on purpose: don't reveal whether the email exists
   if (error || !staffMember) {
-    return { error: "Account not found. Please contact the Super Admin." };
+    return { error: "Invalid email or password." };
   }
 
   if (staffMember.status === "Inactive") {
@@ -33,13 +60,15 @@ export async function processLogin(prevState: any, formData: FormData) {
   const passwordValid = await bcrypt.compare(password, staffMember.password_hash ?? "");
 
   if (!passwordValid) {
-    return { error: "Incorrect password." };
+    return { error: "Invalid email or password." };
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set("alazamat_staff_id", staffMember.id, { path: "/", httpOnly: true, sameSite: "lax" });
-  cookieStore.set("alazamat_role", staffMember.role, { path: "/", httpOnly: true, sameSite: "lax" });
-  cookieStore.set("alazamat_name", staffMember.name, { path: "/", httpOnly: true, sameSite: "lax" });
+  // Signed, httpOnly, expiring session cookie (see lib/auth.ts)
+  await createSession({
+    id: staffMember.id,
+    role: staffMember.role,
+    name: staffMember.name,
+  });
 
   redirect("/dashboard");
 }
