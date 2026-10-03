@@ -43,7 +43,11 @@ export async function addStaff(prevState: ActionState, formData: FormData): Prom
   const file = formData.get("cnic_document") as File | null;
   if (file && file.size > 0) {
     if (file.size > 5 * 1024 * 1024) return { error: "CNIC file size must be less than 5MB" };
-    const fileExt = file.name.split('.').pop();
+    const fileExt = (file.name.split('.').pop() || '').toLowerCase();
+    const ALLOWED_EXTS = ['jpg', 'jpeg', 'png', 'pdf'];
+    if (!ALLOWED_EXTS.includes(fileExt)) {
+      return { error: "CNIC document must be a JPG, PNG or PDF file." };
+    }
     const fileName = `cnic_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `staff_docs/${fileName}`;
     
@@ -84,6 +88,7 @@ export async function markAttendance(formData: FormData) {
   const supabase = await createServer();
   const staff_id = String(formData.get("staff_id"));
   const status = String(formData.get("status")); // Present, Absent, Leave
+  if (!["Present", "Absent", "Leave"].includes(status)) return;
   const today = new Date().toISOString().split('T')[0];
 
   // Upsert lagayenge taake agar pehle se hazri lagi hai toh update ho jaye, warna insert ho
@@ -101,9 +106,12 @@ export async function payStaffSalary(formData: FormData) {
   if (guardError) return;
 
   const supabase = await createServer();
-  const staffName = String(formData.get("staff_name"));
+  const staffName = String(formData.get("staff_name")).slice(0, 120);
   const amount = Number(formData.get("amount"));
-  const description = String(formData.get("description"));
+  const description = String(formData.get("description")).slice(0, 300);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 100000000) {
+    return { error: "Please enter a valid payment amount." };
+  }
 
   await supabase.from("expenses").insert([{
     title: `Salary/Advance: ${staffName} - ${description}`,
@@ -148,6 +156,12 @@ export async function updateStaffFinancials(formData: FormData) {
   const id = String(formData.get("id"));
   const base_salary = Number(formData.get("base_salary"));
   const commission_rate = Number(formData.get("commission_rate"));
+  if (!Number.isFinite(base_salary) || base_salary < 0 || base_salary > 100000000) {
+    return { error: "Please enter a valid salary amount." };
+  }
+  if (!Number.isFinite(commission_rate) || commission_rate < 0 || commission_rate > 100) {
+    return { error: "Commission rate must be between 0 and 100." };
+  }
 
   await supabase.from("staff").update({ 
     base_salary, 
