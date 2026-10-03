@@ -22,7 +22,7 @@ export async function processCheckout(cartItems: CartItem[], totalAmount: number
     "Manager",
     "Cashier",
   ]);
-  if (guardError) return { error: guardError };
+  if (guardError || !session.staffId) return { error: guardError ?? "Not logged in." };
 
   // 1. Validate the shape of the cart — trust nothing else from the client.
   //    Prices, stock and discounts are re-verified against the database below.
