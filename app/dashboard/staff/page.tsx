@@ -29,7 +29,10 @@ export default async function StaffPage() {
   // 1. Fetch All Staff
   const { data: rawStaff, error } = await supabase
     .from("staff")
-    .select("*")
+    .select(
+      // SECURITY: never select password_hash — it would leak into client bundles.
+      "id, name, role, shift, base_salary, commission_rate, phone, status, email, can_give_discount, can_delete_sales, can_view_reports, cnic_url, created_at"
+    )
     .order("created_at", { ascending: true });
 
   if (error) return <div className="p-4 text-red-600">Failed to load staff: {error.message}</div>;
