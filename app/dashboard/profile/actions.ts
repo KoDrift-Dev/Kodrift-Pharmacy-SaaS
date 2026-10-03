@@ -1,6 +1,7 @@
 "use server";
 
 import { createServer } from "@/lib/supabase/server";
+import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -9,29 +10,40 @@ export type ActionState = {
   success?: string;
 };
 
-export async function logAttendance(staffId: string, type: 'Login' | 'Logout') {
+export async function logAttendance(type: "Login" | "Logout") {
+  const { session, error: guardError } = await requireSession();
+  if (guardError || !session.staffId) return { error: guardError ?? "Not logged in." };
+
   const supabase = await createServer();
-  
-  const { error } = await supabase.from("staff_activity").insert([{
-    staff_id: staffId,
-    type: type,
-    status: 'Completed',
-    details: `Staff member clocked ${type === 'Login' ? 'in' : 'out'}`
-  }]);
+
+  // staff_id always comes from the verified session — never from the client
+  const { error } = await supabase.from("staff_activity").insert([
+    {
+      staff_id: session.staffId,
+      type: type,
+      status: "Completed",
+      details: `Staff member clocked ${type === "Login" ? "in" : "out"}`,
+    },
+  ]);
 
   if (error) return { error: error.message };
-  
+
   revalidatePath("/dashboard/profile");
-  return { success: `Successfully clocked ${type === 'Login' ? 'in' : 'out'}!` };
+  return { success: `Successfully clocked ${type === "Login" ? "in" : "out"}!` };
 }
 
 const LeaveSchema = z.object({
-  staff_id: z.string(),
   leave_date: z.string().min(1, "Date is required"),
-  reason: z.string().min(5, "Please provide a valid reason"),
+  reason: z.string().min(5, "Please provide a valid reason").max(500),
 });
 
-export async function submitLeaveRequest(prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function submitLeaveRequest(
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const { session, error: guardError } = await requireSession();
+  if (guardError || !session.staffId) return { error: guardError ?? "Not logged in." };
+
   const supabase = await createServer();
   const validatedFields = LeaveSchema.safeParse(Object.fromEntries(formData));
 
@@ -39,14 +51,16 @@ export async function submitLeaveRequest(prevState: ActionState, formData: FormD
     return { error: "Please fill out all fields correctly." };
   }
 
-  const { staff_id, leave_date, reason } = validatedFields.data;
+  const { leave_date, reason } = validatedFields.data;
 
-  const { error } = await supabase.from("staff_activity").insert([{
-    staff_id: staff_id,
-    type: 'LeaveRequest',
-    status: 'Pending',
-    details: `Date: ${leave_date} | Reason: ${reason}`
-  }]);
+  const { error } = await supabase.from("staff_activity").insert([
+    {
+      staff_id: session.staffId,
+      type: "LeaveRequest",
+      status: "Pending",
+      details: `Date: ${leave_date} | Reason: ${reason}`,
+    },
+  ]);
 
   if (error) return { error: "Failed to submit request: " + error.message };
 
