@@ -16,7 +16,7 @@ export function AttendanceClient({ staffId, isClockedIn }: { staffId: string, is
     setMessage({ type: "", text: "" });
 
     const actionType = isClockedIn ? 'Logout' : 'Login';
-    const result = await logAttendance(staffId, actionType);
+    const result = await logAttendance(actionType);
 
     if (result.error) setMessage({ type: "error", text: result.error });
     if (result.success) setMessage({ type: "success", text: result.success });
@@ -71,7 +71,6 @@ export function AttendanceClient({ staffId, isClockedIn }: { staffId: string, is
         </div>
 
         <form action={formAction} className="space-y-4">
-          <input type="hidden" name="staff_id" value={staffId} />
 
           {leaveState?.error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-bold text-center">{leaveState.error}</div>}
           {leaveState?.success && <div className="p-3 bg-success-soft border border-success/30 rounded-xl text-success text-sm font-bold text-center">{leaveState.success}</div>}
