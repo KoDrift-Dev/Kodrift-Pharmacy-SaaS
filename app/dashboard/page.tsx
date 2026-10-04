@@ -120,10 +120,13 @@ function getPeriodRange(period: PeriodKey): PeriodRange {
 
   const startISO = pktMidnightISO(startStr);
   const endISO = pktMidnightISO(addDays(todayStr, 1));
+  const startYear = startStr.split("-")[0];
   const rangeLabel =
     days === 1
       ? `${fmtShort(todayStr)} ${year}`
-      : `${fmtShort(startStr)} – ${fmtShort(todayStr)} ${year}`;
+      : startYear === year
+        ? `${fmtShort(startStr)} – ${fmtShort(todayStr)} ${year}`
+        : `${fmtShort(startStr)} ${startYear} – ${fmtShort(todayStr)} ${year}`;
 
   return { startStr, endStr: todayStr, startISO, endISO, days, rangeLabel, kpiNoun, chartTitle, chartSubtitle };
 }
